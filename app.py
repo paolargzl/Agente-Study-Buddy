@@ -6,6 +6,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, AIMessage
 
 from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_core.tools import tool  # ✅ (NUEVO) para envolver DDG de forma segura
 from langchain_community.utilities.wikipedia import WikipediaAPIWrapper
 from langchain_community.tools.wikipedia.tool import WikipediaQueryRun
 
@@ -58,11 +59,27 @@ def build_llm():
         api_key=api_key,
     )
 
+# ✅ (NUEVO) Tool segura para DDG: evita el error "Expecting value..."
+_ddg_raw = DuckDuckGoSearchRun()
+
+@tool
+def duckduckgo_search(query: str) -> str:
+    """Busca en DuckDuckGo. Devuelve texto con resultados. Nunca crashea (devuelve mensaje de error controlado)."""
+    try:
+        out = _ddg_raw.run(query)
+        if out is None or not str(out).strip():
+            return "DuckDuckGo no devolvió resultados (respuesta vacía o bloqueada)."
+        return str(out)
+    except Exception as e:
+        return f"DuckDuckGo falló: {e}"
+
 def build_tools():
     tools = []
+
+    # ✅ (CAMBIO) usamos la tool segura en lugar de DuckDuckGoSearchRun() directo
     try:
-        tools.append(DuckDuckGoSearchRun())
-    except ImportError:
+        tools.append(duckduckgo_search)
+    except Exception:
         st.warning("DuckDuckGo no disponible. Asegúrate de tener 'ddgs' en requirements.txt.")
 
     tools.append(
@@ -72,14 +89,16 @@ def build_tools():
     )
     return tools
 
+# ✅ (CAMBIO PEQUEÑO) prompt más robusto para que no se quede atascado si DDG falla
 SYSTEM = """Eres StudyBuddy, un asistente de estudio.
 Responde en español, claro y estructurado.
 
 Reglas:
-- Usa herramientas SOLO si necesitas buscar.
-- DuckDuckGo: info actual / datos concretos.
+- Usa herramientas SOLO si necesitas buscar información externa.
 - Wikipedia: definiciones / explicación enciclopédica.
-- Da siempre una respuesta final útil (no digas 'voy a buscar otra vez' sin responder).
+- DuckDuckGo: info actual / datos concretos.
+- Si una herramienta falla o devuelve vacío, NO te atasques: responde con lo que sepas y sugiere cómo refinar la búsqueda.
+- Da siempre una respuesta final útil.
 """
 
 # Construimos el agent una vez por ejecución
@@ -110,7 +129,6 @@ if user_input:
         with st.spinner("Buscando / razonando..."):
             try:
                 result = agent.invoke({"messages": msgs})
-                # LangGraph devuelve messages; el último suele ser la respuesta
                 final_msg = result["messages"][-1]
                 answer = getattr(final_msg, "content", str(final_msg))
             except Exception as e:
