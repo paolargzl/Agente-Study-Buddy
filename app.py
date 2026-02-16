@@ -10,8 +10,19 @@ from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_community.utilities.wikipedia import WikipediaAPIWrapper
 from langchain_community.tools.wikipedia.tool import WikipediaQueryRun
 
-# ✅ LangChain “moderno”: create_react_agent + AgentExecutor suele ser más compatible
-from langchain.agents import create_react_agent, AgentExecutor
+# LangChain imports (compatibles con varias versiones)
+try:
+    from langchain.agents import AgentExecutor
+except ImportError:
+    # fallback (algunas versiones lo mueven)
+    from langchain.agents.agent import AgentExecutor
+
+try:
+    from langchain.agents import create_react_agent
+except ImportError:
+    # fallback (rutas alternativas según versión)
+    from langchain.agents.react.agent import create_react_agent
+
 from langchain_core.prompts import PromptTemplate
 
 load_dotenv()
