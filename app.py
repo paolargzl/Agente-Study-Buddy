@@ -118,7 +118,7 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # Memoria: LangGraph usa lista de mensajes
+     # Memoria: LangGraph usa lista de mensajes
     msgs = []
     if use_memory:
         msgs.extend(st.session_state.chat_history)
@@ -130,7 +130,19 @@ if user_input:
             try:
                 result = agent.invoke({"messages": msgs})
                 final_msg = result["messages"][-1]
-                answer = getattr(final_msg, "content", str(final_msg))
+                content = getattr(final_msg, "content", "")
+
+                # ✅ NORMALIZAR RESPUESTA DE GEMINI
+                if isinstance(content, list):
+                    answer = "\n".join(
+                        part.get("text", str(part)) if isinstance(part, dict) else str(part)
+                        for part in content
+                    ).strip()
+                elif isinstance(content, dict):
+                    answer = str(content.get("text", content)).strip()
+                else:
+                    answer = str(content).strip()
+
             except Exception as e:
                 answer = f"⚠️ Error: {e}"
 
@@ -141,3 +153,4 @@ if user_input:
     if use_memory:
         st.session_state.chat_history.append(HumanMessage(content=user_input))
         st.session_state.chat_history.append(AIMessage(content=answer))
+
